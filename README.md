@@ -1,6 +1,9 @@
 # ComputerVisionCourse
 Assignments and related projects for Computer Vision course with Python's OpenCV image recognition library.
 
+pip install opencv-python
+pip install -U scikit-image
+
 Assignment 1: 
 * Display dog.bmp image and histogram. 
 * Slider for Brightness and Contrast. 
