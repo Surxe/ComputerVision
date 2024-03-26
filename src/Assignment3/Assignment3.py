@@ -54,7 +54,7 @@ for num in image_num:
   # Set dimensions for window separation
   #all images should be 150x150
   height, width, channel = image.shape # Get height/width quickly for window size and offset
-  height=height+30 # Add 28 pixels of height for the window tab size
+  height=height+30 # Add 30 pixels of height for the window tab size
 
   # Original
   cv.namedWindow('Img'+str(num)+'Original')
@@ -80,8 +80,6 @@ for num in image_num:
 
 
 
-
-
   # Apply segmentation
   # Apply mean shift algorithm
   mean_shift = cv.pyrMeanShiftFiltering(image, 10, 30, 2)
@@ -103,6 +101,7 @@ for num in image_num:
   otsu4 = (regions4 / (len(thresholds4) - 1) * 255).astype(np.uint8) #regions4.astype(np.uint8) * 255 
 
   
+
   # Show Images
   # Img1Original
   cv.imshow('Img'+str(num)+'Original', image)
