@@ -21,3 +21,8 @@ Assignment 3:
 * Apply Mean shift segmentation
 * Apply Otsu segmentation with 2 classes (binarization)
 * Apply Otsu segmentation with several classes (3+)
+
+Assignment 4:
+* Apply Hough Circle Transform using OpenCV
+* Apply Hough Circle Transform manually
+* Compare performance (accuracy and runtime) between OpenCV and manually

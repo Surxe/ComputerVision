@@ -2,6 +2,8 @@ import cv2 as cv
 import numpy as np
 import os
 import json
+import time
+import math
 
 global root_path
 root_path = "src/Assignment4/"
@@ -12,102 +14,79 @@ def createWindow(full_window_name, img, x, y):
     cv.moveWindow(full_window_name, x, y)
     cv.imshow(full_window_name, img)
 
-# def detect_circles_manual(image, dp=1, minDist=20, canny_param1=30, canny_param2=50, votes_threshold=2, minRadius=0, maxRadius=0):
-#     """
-#     Detect circles in a grayscale image using Hough Transform (manual implementation).
+# Function to find local maximum within each window
+def find_local_maxima(accumulator, window_radius=2):
+    if window_radius%2!=0:
+        raise ValueError("Window radius must be an even number")
+    h, w, d = accumulator.shape
+    window_diameter = window_radius*2+1  # Half of the window size #window diameter is window_radius*2+1
+    local_maxima = np.zeros_like(accumulator)
 
-#     Args:
-#         image: Grayscale input image.
-#         dp: Inverse ratio of the accumulator resolution to the image resolution (default: 1).
-#         minDist: Minimum distance between the centers of the detected circles (default: 20).
-#         param1: Canny first method-specific parameter (default: 30).
-#         param2: Canny second method-specific parameter (default: 50).
-#         minRadius: Minimum circle radius (default: 0).
-#         maxRadius: Maximum circle radius (default: 0).
+    for y in range(window_radius, h - window_radius):
+        for x in range(window_radius, w - window_radius):
+            for r in range(d):
+                if y - window_radius < 0 or y + window_radius >= h or x - window_radius < 0 or x + window_radius >= w:
+                    continue
+                window = accumulator[y - window_radius:y + window_radius + 1,
+                                    x - window_radius:x + window_radius + 1, 
+                                    r]
+                max_value = np.max(window)
+                if max_value == 0:
+                    continue
+                if accumulator[y, x, r] == max_value:
+                    local_maxima[y, x, r] = max_value
+                else:
+                    local_maxima[y, x, r] = 0
 
-#     Returns:
-#         circles: A list of detected circles in the format (x, y, radius).
-#     """
-#     # Apply edge detection on the image
-#     edges = cv.Canny(image, canny_param1, canny_param2)
+    return local_maxima
 
-#     # Apply Hough Transform to detect circles
-#     circles = []
-#     rows, cols = image.shape
-#     r_min, r_max = minRadius, maxRadius
-#     accumulator = np.zeros(image.shape)
-
-#     for y in range(rows):
-#         for x in range(cols):
-#             if edges[y, x] != 0:
-#                 for r in range(r_min, r_max + 1):
-#                     for t in range(360):
-#                         a = int(x - r * np.cos(np.radians(t)))
-#                         b = int(y - r * np.sin(np.radians(t)))
-#                         if 0 <= a < cols and 0 <= b < rows:
-#                             if edges[b, a] == 0:
-#                                 break
-
-#                             accumulator[b, a] += 1
-#                         if accumulator[b, a] > votes_threshold: #must meet threshold
-#                             circles.append((b, a, r, accumulator[b, a]))
-                    
-
-    
-
-    
-#     # Filter circles based on minDist
-#     # filtered_circles = []
-#     # for circle in circles:
-#     #     y, x, r, votes = circle
-
-#     #     is_valid = True
-#     #     for existing_circle in filtered_circles:
-#     #         x0, y0, _, _ = existing_circle
-#     #         if ((x - x0) ** 2 + (y - y0) ** 2) ** .5 < minDist:
-#     #             is_valid = False
-#     #             break
-#     #     if is_valid:
-#     #         filtered_circles.append(circle)
-
-#     # Convert to the format (x, y, radius)
-#     #filtered_circles = [(x, y, r) for (x, y, r, votes) in filtered_circles]
-
-#     return circles
-
-
-def detect_circles_manual2(image, minDist=20, canny_param1=30, canny_param2=50, votes_threshold=2, minRadius=0, maxRadius=0):
+def detect_circles_manual(image, minDist=20, canny_param1=30, canny_param2=50, votes_threshold=2, minRadius=0, maxRadius=0):
     # Apply Canny edge detection
     edges = cv.Canny(image, canny_param1, canny_param2)
     
+    y_dim = edges.shape[0]
+    x_dim = edges.shape[1]
+
     # Initialize an accumulator array to store votes for circle centers
-    accumulator = np.zeros(image.shape[:2], dtype=np.uint16)
+    accumulator = np.zeros((y_dim, x_dim, maxRadius))
     
     # Iterate through each pixel in the edge image
     for y in range(edges.shape[0]):
         for x in range(edges.shape[1]):
             # If this is an edge pixel
             if edges[y, x] > 0:
-                # Calculate gradient direction
-                gradient_dir = np.arctan2(y, x)
-                
-                # Calculate possible circle centers
-                for r in range(minRadius, maxRadius):
-                    a = int(x - r * np.cos(gradient_dir))
-                    b = int(y - r * np.sin(gradient_dir))
+                for t in range(0, 360):
+                    # Calculate gradient direction
+                    #gradient_dir = np.arctan2(y, x)
                     
-                    # Ensure the center is within the image bounds
-                    if a >= 0 and a < image.shape[1] and b >= 0 and b < image.shape[0]:
-                        accumulator[b, a] += 1  # Vote for this circle center
-    
-    # Find circles with enough votes
-    circles = []
+                    # Calculate possible circle centers
+                    for r in range(minRadius, maxRadius):
+                        a = int(x - r * np.cos(t))
+                        b = int(y - r * np.sin(t))
+                        
+                        # Ensure the center is within the image bounds
+                        if a >= 0 and a < x_dim and b >= 0 and b < y_dim:
+                            accumulator[b, a, r] += 1  # Vote for this circle center
+
+    #accumulator = find_local_maxima(accumulator)
+    accumulator_thresholded = np.zeros_like(accumulator)
     for y in range(accumulator.shape[0]):
         for x in range(accumulator.shape[1]):
-            if accumulator[y, x] >= votes_threshold:
-                if all(np.sqrt((x - xc) ** 2 + (y - yc) ** 2) >= minDist for xc, yc, _ in circles):
-                    circles.append((x, y, minRadius))
+            for r in range(accumulator.shape[2]):
+                if accumulator[y, x, r] >= votes_threshold:
+                    accumulator_thresholded[y, x, r] = accumulator[y, x, r]
     
+                            
+    accumulator_localized = find_local_maxima(accumulator_thresholded, window_radius=10)
+
+    circles = []
+    for y in range(accumulator_localized.shape[0]):
+        for x in range(accumulator_localized.shape[1]):
+            for r in range(accumulator_localized.shape[2]):
+                if accumulator_localized[y, x, r] >= votes_threshold:
+                    if all(np.sqrt((x - xc) ** 2 + (y - yc) ** 2) >= minDist for xc, yc, _, _ in circles):
+                        circles.append((x, y, r, accumulator_localized[y, x, r]))
+
     return circles
 
 
@@ -117,7 +96,7 @@ def processImage(image_name, index):
     # Load image
     image_path = os.path.join(root_path,image_name)
     img = cv.imread(image_path)
-    img = rescale(img, 0.65)
+    img = rescale(img, .65)
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY) #ensure its grayscale
 
     # Get the height and width of the image
@@ -148,11 +127,14 @@ def processImage(image_name, index):
     circle_hash['Circles'] = {}
 
     # cvHoughCircle
+    start_time = time.time()
     imgcvHoughCircle = imgBlur.copy()
     circles = cv.HoughCircles(imgcvHoughCircle, cv.HOUGH_GRADIENT, 
                               dp=1, minDist=30, 
                               param1=200, param2=35, 
                               minRadius=10, maxRadius=55)
+    end_time = time.time()
+    print("Image", index, "Time taken for cvHoughCircle:", end_time-start_time)
     
     if circles is not None:
         circles = np.uint16(np.around(circles)) #convert types
@@ -163,48 +145,48 @@ def processImage(image_name, index):
         for circle in circles[0,:]:
             i+=1
             circle_hash['Circles']['cv'][str(i)] = {}
-            circle_hash['Circles']['cv'][str(i)]["x"] = str(circle[0])
-            circle_hash['Circles']['cv'][str(i)]["y"] = str(circle[1])
-            circle_hash['Circles']['cv'][str(i)]["radius"] = str(circle[2])
+            circle_hash['Circles']['cv'][str(i)]["x"] = int(circle[0])
+            circle_hash['Circles']['cv'][str(i)]["y"] = int(circle[1])
+            circle_hash['Circles']['cv'][str(i)]["radius"] = int(circle[2])
                 
             cv.circle(imgcvHoughCircle, (circle[0], circle[1]), circle[2], (255,255,255), 3)
 
     application_names.append('cvHoughCircle')
     application_images.append(imgcvHoughCircle)
 
-    # manualHoughCircle
-    # imgManualHoughCircle = imgBlur.copy()
-    # circles = detect_circles_manual2(imgManualHoughCircle, 
-    #                                 minDist=30, 
-    #                                 canny_param1=canny_param1, canny_param2=canny_param2, 
-    #                                 votes_threshold=3,
-    #                                 minRadius=15, maxRadius=65)
-    # if circles:
-    #     circle_hash['Circles']['manual'] = {}
-    #     i=0
-        
-    #     for (x,y,r) in circles:
-    #         i+=1
-    #         circle_hash['Circles']['manual'][str(i)] = {}
-    #         circle_hash['Circles']['manual'][str(i)]["x"] = x
-    #         circle_hash['Circles']['manual'][str(i)]["y"] = y
-    #         circle_hash['Circles']['manual'][str(i)]["radius"] = r
-    #         #circle_hash['Circles']['manual'][str(i)]["votes"] = votes
+    #manualHoughCircle
+    start_time = time.time()
+    imgManualHoughCircle = cv.cvtColor(imgBlur, cv.COLOR_GRAY2RGB)
+    circles = detect_circles_manual(imgBlur.copy(), 
+                                    minDist=30, 
+                                    canny_param1=canny_param1, canny_param2=canny_param2, 
+                                    votes_threshold=105,
+                                    minRadius=15, maxRadius=65)
+    
+    circle_hash['Circles']['manual'] = {}
+    i=0
+    
+    for (x,y,r,votes) in circles:
+        i+=1
+        circle_hash['Circles']['manual'][str(i)] = {}
+        circle_hash['Circles']['manual'][str(i)]["x"] = int(x)
+        circle_hash['Circles']['manual'][str(i)]["y"] = int(y)
+        circle_hash['Circles']['manual'][str(i)]["radius"] = int(r)
+        circle_hash['Circles']['manual'][str(i)]["votes"] = int(votes)
 
-    #         cv.circle(imgManualHoughCircle, (x, y), r, (255,255,255), 3)
+        cv.circle(imgManualHoughCircle, (x, y), r, (255,0,0), 3)
+        cv.circle(imgManualHoughCircle, (x, y), int(math.cbrt(int(votes))), (0, 0, 255), int(math.cbrt(int(votes))))
 
-    # print(circle_hash)
-
-    # application_names.append('manualHoughCircle')
-    # application_images.append(imgManualHoughCircle)
+    end_time = time.time()
+    print("Image", index, "Time taken for manualHoughCircle:", end_time-start_time)
+    application_names.append('manualHoughCircle')
+    application_images.append(imgManualHoughCircle)
 
     #write circle information to file
     output_file = os.path.join(root_path, image_name.replace(".png","_output.txt"))
     with open(output_file, 'w') as file:
         json_str = json.dumps(circle_hash, indent=4)
         file.write(json_str)
-
-
 
     # Create windows for each application of the image
     for application_index in range(len(application_names)):
@@ -215,14 +197,24 @@ def rescale(img, scale=1):
     return cv.resize(img, None, fx=scale, fy=scale, interpolation=cv.INTER_LINEAR)
 
 if __name__=="__main__":  
+    print("Assignment 4: Hough Circle Transform\nProgram initiating...")
     image_name_indexless = "circles.png" 
     for i in range(1,4):
         image_name = image_name_indexless.replace(".",str(i)+".") #circles.png to circles1.png
+        print('Processing', image_name)
         processImage(image_name, i)
+
+    print("Program complete")
 
     # Wait to close
     cv.waitKey(0)
     cv.destroyAllWindows()
 
+    print("Program terminated")
+
 #https://docs.opencv.org/4.x/d3/de5/tutorial_js_houghcircles.html
+#https://docs.opencv.org/4.x/da/d22/tutorial_py_canny.html
+    
+
+
     
